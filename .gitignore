@@ -1,0 +1,6 @@
+.*
+*.cmi
+*.cmx
+*.o
+*.gsch*
+gsch*
