@@ -47,6 +47,13 @@ module PriorityQueue = struct
 end;;
 
 type 'a tree = Leaf of 'a | Node of 'a tree * 'a tree
+let tree_left = function
+    | Node (left, _) -> left
+    | leaf -> leaf
+let tree_right = function
+    | Node (_, right) -> right
+    | leaf -> leaf
+
 let rec make_huffman_tree queue =
     if PriorityQueue.is_single queue
     then
@@ -73,9 +80,9 @@ let prq = List.fold_right
 let tree = make_huffman_tree prq;;
 let code = get_huffman_code tree;;
 
-class bit_stream (outfile : string) =
+class bitstream_out (filename : string) =
     object (self)
-        val out_chan = Out_channel.open_bin outfile
+        val out_chan = Out_channel.open_bin filename
         val mutable buffer : int list = []
 
         method private dump_byte =
@@ -100,17 +107,46 @@ class bit_stream (outfile : string) =
             Out_channel.close out_chan
     end;;
 
-let stream = new bit_stream "hello.gsch1";;
+let stream = new bitstream_out "hello.gsch1";;
+Array.map (fun c -> stream#write_bits (Hashtbl.find code c)) data;;
+stream#close;;
 
-stream#write_bit 1;;
-stream#write_bit 1;;
-stream#write_bit 0;;
-stream#write_bit 0;;
-stream#write_bit 1;;
-stream#write_bit 0;;
-stream#write_bit 0;;
-stream#write_bit 1;;
-stream#write_bits [1; 1; 0; 0; 1; 0; 0; 1];;
-stream#write_bits [1; 1; 0; 0; 1; 0; 0; 1; 1; 1; 0; 0; 1; 0; 0; 1];;
+class bitstream_in (filename : string) =
+    object (self)
+        val in_chan = In_channel.open_bin filename
+        val mutable buffer : int list = []
 
+        method private read_byte =
+            let bits = match In_channel.input_byte in_chan with
+            | None -> []
+            | Some byte ->
+                let rec aux acc = function
+                    | 8 -> List.rev acc
+                    | n -> let shifted = Int.shift_right byte n in
+                           let bit = Int.logand 1 shifted in
+                           aux (bit :: acc) (n + 1)
+                in aux [] 0
+            in buffer <- buffer @ bits
+
+        method read_bit =
+            if List.length buffer == 0 then self#read_byte;
+            match buffer with
+            | [] -> None
+            | hd :: tl -> buffer <- tl; Some hd
+        method close = In_channel.close in_chan
+    end;;
+
+let stream = new bitstream_in "hello.gsch1";;
+
+let rec decompress acc = function
+    | Leaf value -> decompress (value :: acc) tree
+    | Node (left, right) ->
+        match stream#read_bit with
+        | None -> List.rev acc
+        | Some 0 -> decompress acc left
+        | Some 1 -> decompress acc right
+        | Some _ -> List.rev acc;; (* Shouldn't happen *)
+
+let read_data = decompress [] tree;;
+List.iter (Printf.printf "%c") read_data;;
 stream#close;;
