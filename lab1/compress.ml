@@ -40,6 +40,14 @@ module PriorityQueue = struct
             | Some node -> Some (priority, value, node)
 end;;
 
+type bit = Zero | One
+let bit_from_int = function
+    | 0 -> Zero
+    | _ -> One
+let int_from_bit = function
+    | Zero -> 0
+    | One -> 1
+
 module Huffman = struct
     type 'a tree = Leaf of 'a | Node of 'a tree * 'a tree
 
@@ -67,7 +75,7 @@ module Huffman = struct
         let rec aux acc run = function
             | Leaf value -> (value, List.rev run) :: acc
             | Node (left, right) ->
-                (aux acc (0 :: run) left) @ (aux acc (1 :: run) right)
+                (aux acc (Zero :: run) left) @ (aux acc (One :: run) right)
         in Hashtbl.of_seq (List.to_seq (aux [] [] tree))
 end;;
 
@@ -84,12 +92,13 @@ let code = Huffman.get_code tree;;
 class bitstream_out (filename : string) =
     object (self)
         val out_chan = Out_channel.open_bin filename
-        val mutable buffer : int list = []
+        val mutable buffer : bit list = []
 
         method private dump_byte =
             let byte = ref 0 in
                 for i = 0 to min 7 (List.length buffer - 1) do
-                    byte := Int.logor !byte (Int.shift_left (List.hd buffer) i);
+                    let bit = int_from_bit (List.hd buffer) in
+                    byte := Int.logor !byte (Int.shift_left bit i);
                     buffer <- List.tl buffer
                 done;
             Out_channel.output_char out_chan (char_of_int !byte)
@@ -133,7 +142,7 @@ class bitstream_in (filename : string) =
             if List.length buffer == 0 then self#read_byte;
             match buffer with
             | [] -> None
-            | hd :: tl -> buffer <- tl; Some hd
+            | hd :: tl -> buffer <- tl; Some (bit_from_int hd)
         method close = In_channel.close in_chan
     end;;
 
@@ -144,9 +153,8 @@ let rec decompress acc = function
     | Huffman.Node (left, right) ->
         match stream#read_bit with
         | None -> List.rev acc
-        | Some 0 -> decompress acc left
-        | Some 1 -> decompress acc right
-        | Some _ -> List.rev acc;; (* Не должно выполняться *)
+        | Some Zero -> decompress acc left
+        | Some One -> decompress acc right
 
 let read_data = decompress [] tree;;
 List.iter (Printf.printf "%c") read_data;;
