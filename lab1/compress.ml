@@ -1,12 +1,3 @@
-let get_weights xs =
-    let mp = Hashtbl.create 128 in
-    for i = 0 to Array.length xs - 1 do
-        match Hashtbl.find_opt mp xs.(i) with
-        | None -> Hashtbl.add mp xs.(i) 1
-        | Some v -> Hashtbl.replace mp xs.(i) (v + 1)
-    done;
-    Hashtbl.fold (fun k v acc -> (k, v) :: acc) mp [];;
-
 let read_file filename =
     let chan = In_channel.open_bin filename in
     let str = In_channel.input_all chan in
@@ -15,7 +6,6 @@ let read_file filename =
 
 module PriorityQueue = struct
     type 'a queue = Empty | Node of int * 'a * 'a queue * 'a queue
-    let empty = Empty
     let is_single = function
         | Node (_, _, Empty, Empty) -> true
         | _ -> false
@@ -34,51 +24,62 @@ module PriorityQueue = struct
                 (Node (lprio, lelt, _, _) as left),
                 (Node (rprio, relt, _, _) as right)) ->
             if lprio <= rprio
-            then Some (Node (lprio, lelt,
-                             Option.get (remove_top left), right))
-            else Some (Node (rprio, relt, left,
-                             Option.get (remove_top right)))
+            then let branch = match remove_top left with
+                   | None -> Empty
+                   | Some v -> v
+                 in Some (Node (lprio, lelt, branch, right))
+            else let branch = match remove_top right with
+                   | None -> Empty
+                   | Some v -> v
+                 in Some (Node (rprio, relt, left, branch))
     let extract = function
         | Empty -> None
-        | Node(priority, value, _, _) as queue ->
+        | Node (priority, value, _, _) as queue ->
             match remove_top queue with
             | None -> Some (priority, value, Empty)
             | Some node -> Some (priority, value, node)
 end;;
 
-type 'a tree = Leaf of 'a | Node of 'a tree * 'a tree
-let tree_left = function
-    | Node (left, _) -> left
-    | leaf -> leaf
-let tree_right = function
-    | Node (_, right) -> right
-    | leaf -> leaf
+module Huffman = struct
+    type 'a tree = Leaf of 'a | Node of 'a tree * 'a tree
 
-let rec make_huffman_tree queue =
-    if PriorityQueue.is_single queue
-    then
-        let (_, value, _) = Option.get (PriorityQueue.extract queue) in value
-    else
-        let (p1, v1, queue) = Option.get (PriorityQueue.extract queue) in
-        let (p2, v2, queue) = Option.get (PriorityQueue.extract queue) in
-        make_huffman_tree (PriorityQueue.insert queue (p1 + p2) (Node (v1, v2)));;
+    let get_weights xs =
+        let mp = Hashtbl.create 128 in
+        for i = 0 to Array.length xs - 1 do
+            match Hashtbl.find_opt mp xs.(i) with
+            | None -> Hashtbl.add mp xs.(i) 1
+            | Some v -> Hashtbl.replace mp xs.(i) (v + 1)
+        done;
+        Hashtbl.fold (fun k v acc -> (k, v) :: acc) mp [];;
 
-let get_huffman_code tree =
-    let rec aux acc run = function
-        | Leaf value -> (value, List.rev run) :: acc
-        | Node (left, right) ->
-            (aux acc (0 :: run) left) @ (aux acc (1 :: run) right)
-    in Hashtbl.of_seq (List.to_seq (aux [] [] tree))
+    (* TODO: Избавиться от Option.get *)
+    let rec from_queue queue =
+        if PriorityQueue.is_single queue
+        then
+            let (_, value, _) = Option.get (PriorityQueue.extract queue)
+            in value
+        else
+            let (p1, v1, queue) = Option.get (PriorityQueue.extract queue) in
+            let (p2, v2, queue) = Option.get (PriorityQueue.extract queue) in
+            from_queue (PriorityQueue.insert queue (p1 + p2) (Node (v1, v2)));;
+
+    let get_code tree =
+        let rec aux acc run = function
+            | Leaf value -> (value, List.rev run) :: acc
+            | Node (left, right) ->
+                (aux acc (0 :: run) left) @ (aux acc (1 :: run) right)
+        in Hashtbl.of_seq (List.to_seq (aux [] [] tree))
+end;;
 
 let data = read_file "../texts/mytest.txt"
-let weights = get_weights data
+let weights = Huffman.get_weights data
 let prq = List.fold_right
     (fun (character, weight) acc ->
-        PriorityQueue.insert acc weight (Leaf character))
+        PriorityQueue.insert acc weight (Huffman.Leaf character))
     weights
-    PriorityQueue.empty;;
-let tree = make_huffman_tree prq;;
-let code = get_huffman_code tree;;
+    PriorityQueue.Empty;;
+let tree = Huffman.from_queue prq;;
+let code = Huffman.get_code tree;;
 
 class bitstream_out (filename : string) =
     object (self)
@@ -139,13 +140,13 @@ class bitstream_in (filename : string) =
 let stream = new bitstream_in "hello.gsch1";;
 
 let rec decompress acc = function
-    | Leaf value -> decompress (value :: acc) tree
-    | Node (left, right) ->
+    | Huffman.Leaf value -> decompress (value :: acc) tree
+    | Huffman.Node (left, right) ->
         match stream#read_bit with
         | None -> List.rev acc
         | Some 0 -> decompress acc left
         | Some 1 -> decompress acc right
-        | Some _ -> List.rev acc;; (* Shouldn't happen *)
+        | Some _ -> List.rev acc;; (* Не должно выполняться *)
 
 let read_data = decompress [] tree;;
 List.iter (Printf.printf "%c") read_data;;
