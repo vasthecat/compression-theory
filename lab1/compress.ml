@@ -75,16 +75,29 @@ let code = get_huffman_code tree;;
 
 class bit_stream (outfile : string) =
     object (self)
-        val out_fd = open_out_bin outfile
+        val out_chan = Out_channel.open_bin outfile
         val mutable buffer : int list = []
-        method write_bit bit = buffer <- bit :: buffer
-        method dump_byte =
+
+        method private dump_byte =
             let byte = ref 0 in
-                for i = 0 to 7 do
+                for i = 0 to min 7 (List.length buffer - 1) do
                     byte := Int.logor !byte (Int.shift_left (List.hd buffer) i);
                     buffer <- List.tl buffer
                 done;
-            output_char out_fd (char_of_int !byte)
+            Out_channel.output_char out_chan (char_of_int !byte)
+
+        method write_bit bit =
+            buffer <- buffer @ [bit];
+            if List.length buffer == 8 then self#dump_byte
+        method write_bits = function
+            | [] -> ()
+            | bit :: bits ->
+                self#write_bit bit;
+                self#write_bits bits
+        method close =
+            if List.length buffer != 0 then self#dump_byte;
+            Out_channel.flush out_chan;
+            Out_channel.close out_chan
     end;;
 
 let stream = new bit_stream "hello.gsch1";;
@@ -92,10 +105,12 @@ let stream = new bit_stream "hello.gsch1";;
 stream#write_bit 1;;
 stream#write_bit 1;;
 stream#write_bit 0;;
+stream#write_bit 0;;
 stream#write_bit 1;;
+stream#write_bit 0;;
+stream#write_bit 0;;
 stream#write_bit 1;;
-stream#write_bit 0;;
-stream#write_bit 0;;
-stream#write_bit 0;;
+stream#write_bits [1; 1; 0; 0; 1; 0; 0; 1];;
+stream#write_bits [1; 1; 0; 0; 1; 0; 0; 1; 1; 1; 0; 0; 1; 0; 0; 1];;
 
-stream#dump_byte;;
+stream#close;;
