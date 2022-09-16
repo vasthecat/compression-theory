@@ -65,7 +65,7 @@ let load_metadata (data : char array) =
     let queue = List.fold_right
         (fun (character, weight) acc ->
             Priority_queue.insert acc weight (Leaf character))
-        !weights
+        (List.rev !weights)
         Priority_queue.Empty in
     let tree = from_queue queue in
     let code = get_code tree in
