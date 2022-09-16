@@ -6,12 +6,6 @@ let int_from_bit = function
     | Zero -> 0
     | One -> 1
 
-let read_file filename =
-    let chan = In_channel.open_bin filename in
-    let str = In_channel.input_all chan in
-    In_channel.close chan;
-    (Array.of_seq (String.to_seq str));;
-
 type 'a tree = Leaf of 'a | Node of 'a tree * 'a tree
 
 let get_weights xs =
@@ -95,11 +89,14 @@ let compute_metadata data =
       weights = weights; tree = tree;
       code = code };;
 
-class bitstream_out (filename : string) =
+class bit_compressor =
     object (self)
-        val out_chan = Out_channel.open_bin filename
         val mutable buffer : bit list = []
+        val mutable remainder : char = char_of_int 0
+        val mutable result : char list = []
 
+        method private output_char byte =
+            result <- byte :: result
         method private dump_byte =
             let byte = ref 0 in
                 for i = 0 to min 7 (List.length buffer - 1) do
@@ -107,11 +104,11 @@ class bitstream_out (filename : string) =
                     byte := Int.logor !byte (Int.shift_left bit i);
                     buffer <- List.tl buffer
                 done;
-            Out_channel.output_char out_chan (char_of_int !byte)
+            self#output_char (char_of_int !byte)
 
         method write_metadata metadata =
             let dumped = dump_metadata metadata in
-            List.iter (Out_channel.output_char out_chan) dumped
+            List.iter self#output_char dumped
         method write_bit bit =
             buffer <- buffer @ [bit];
             if List.length buffer == 8 then self#dump_byte
@@ -121,38 +118,13 @@ class bitstream_out (filename : string) =
                 self#write_bit bit;
                 self#write_bits bits
         method close =
-            let remainder = (8 - List.length buffer) mod 8 in begin
-                if remainder != 0 then self#dump_byte;
-                Out_channel.seek out_chan 0L;
-                Out_channel.output_char out_chan (char_of_int remainder);
-                Out_channel.flush out_chan;
-                Out_channel.close out_chan
+            let remainder' = (8 - List.length buffer) mod 8 in begin
+                if remainder' != 0 then self#dump_byte;
+                remainder <- char_of_int remainder';
             end
-    end;;
-
-class bitstream_in (filename : string) =
-    object (self)
-        val in_chan = In_channel.open_bin filename
-        val mutable buffer : int list = []
-
-        method private read_byte =
-            let bits = match In_channel.input_byte in_chan with
-            | None -> []
-            | Some byte ->
-                let rec aux acc = function
-                    | 8 -> List.rev acc
-                    | n -> let shifted = Int.shift_right byte n in
-                           let bit = Int.logand 1 shifted in
-                           aux (bit :: acc) (n + 1)
-                in aux [] 0
-            in buffer <- buffer @ bits
-
-        method read_bit =
-            if List.length buffer == 0 then self#read_byte;
-            match buffer with
-            | [] -> None
-            | hd :: tl -> buffer <- tl; Some (bit_from_int hd)
-        method close = In_channel.close in_chan
+        method get_result =
+            let arr = Array.of_seq (List.to_seq (List.rev result)) in
+            arr.(0) <- remainder; arr
     end;;
 
 class bit_decompressor (archive : char array) =
@@ -197,32 +169,22 @@ class bit_decompressor (archive : char array) =
             | hd :: tl -> buffer <- tl; Some (bit_from_int hd)
     end;;
 
-let decompress_old stream tree =
-    let rec aux acc = function
-    | Leaf value -> aux (value :: acc) tree
-    | Node (left, right) ->
-        match stream#read_bit with
-        | None -> List.rev acc
-        | Some Zero -> aux acc left
-        | Some One -> aux acc right
-    in aux [] tree;;
-
-let compress filename bin_data =
+let compress bin_data =
     let metadata = compute_metadata bin_data in
-    let stream = new bitstream_out filename in
+    let stream = new bit_compressor in
     stream#write_metadata metadata;
     Array.iter (fun c -> stream#write_bits (Hashtbl.find metadata.code c)) bin_data;
-    stream#close;;
+    stream#close;
+    stream#get_result;;
 
-let decompress filename =
-    let data = read_file filename in
+let decompress data =
     let decompressor = new bit_decompressor data in
     let tree = decompressor#metadata.tree in
     let rec aux acc = function
-    | Leaf value -> aux (value :: acc) tree
-    | Node (left, right) ->
-        match decompressor#read_bit with
-        | None -> List.rev acc
-        | Some Zero -> aux acc left
-        | Some One -> aux acc right
-    in aux [] tree;;
+        | Leaf value -> aux (value :: acc) tree
+        | Node (left, right) ->
+            match decompressor#read_bit with
+            | None -> List.rev acc
+            | Some Zero -> aux acc left
+            | Some One -> aux acc right
+    in Array.of_seq (List.to_seq (aux [] tree));;
