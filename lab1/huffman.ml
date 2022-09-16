@@ -12,8 +12,8 @@ let get_weights xs =
     let mp = Hashtbl.create 256 in
     for i = 0 to Array.length xs - 1 do
         match Hashtbl.find_opt mp xs.(i) with
-        | None -> Hashtbl.add mp xs.(i) 1
-        | Some v -> Hashtbl.replace mp xs.(i) (v + 1)
+            | None -> Hashtbl.add mp xs.(i) 1
+            | Some v -> Hashtbl.replace mp xs.(i) (v + 1)
     done;
     let l = Hashtbl.fold (fun k v acc -> (k, v) :: acc) mp [] in
     let l' = List.sort (fun (k, v) (k', v') -> Int.min v v') l in
@@ -112,11 +112,7 @@ class bit_compressor =
         method write_bit bit =
             buffer <- buffer @ [bit];
             if List.length buffer == 8 then self#dump_byte
-        method write_bits = function
-            | [] -> ()
-            | bit :: bits ->
-                self#write_bit bit;
-                self#write_bits bits
+        method write_bits = List.iter self#write_bit
         method close =
             let remainder' = (8 - List.length buffer) mod 8 in begin
                 if remainder' != 0 then self#dump_byte;
@@ -141,15 +137,15 @@ class bit_decompressor (archive : char array) =
 
         method private read_byte =
             let bits = match self#get_opt data ptr with
-            | None -> []
-            | Some byte ->
-                let num = int_of_char byte in
-                let rec aux acc = function
-                    | 8 -> List.rev acc
-                    | n -> let shifted = Int.shift_right num n in
-                           let bit = Int.logand 1 shifted in
-                           aux (bit :: acc) (n + 1)
-                in aux [] 0
+                | None -> []
+                | Some byte ->
+                    let num = int_of_char byte in
+                    let rec aux acc = function
+                        | 8 -> List.rev acc
+                        | n -> let shifted = Int.shift_right num n in
+                               let bit = Int.logand 1 shifted in
+                               aux (bit :: acc) (n + 1)
+                    in aux [] 0
             in begin
                 let bits = if ptr == Array.length data - 1 then
                     List.of_seq (
@@ -165,15 +161,16 @@ class bit_decompressor (archive : char array) =
         method read_bit =
             if List.length buffer == 0 then self#read_byte;
             match buffer with
-            | [] -> None
-            | hd :: tl -> buffer <- tl; Some (bit_from_int hd)
+                | [] -> None
+                | hd :: tl -> (buffer <- tl; Some (bit_from_int hd))
     end;;
 
 let compress bin_data =
     let metadata = compute_metadata bin_data in
     let stream = new bit_compressor in
     stream#write_metadata metadata;
-    Array.iter (fun c -> stream#write_bits (Hashtbl.find metadata.code c)) bin_data;
+    Array.iter (fun c ->
+        stream#write_bits (Hashtbl.find metadata.code c)) bin_data;
     stream#close;
     stream#get_result;;
 
@@ -184,7 +181,8 @@ let decompress data =
         | Leaf value -> aux (value :: acc) tree
         | Node (left, right) ->
             match decompressor#read_bit with
-            | None -> List.rev acc
-            | Some Zero -> aux acc left
-            | Some One -> aux acc right
+                | None -> List.rev acc
+                | Some Zero -> aux acc left
+                | Some One -> aux acc right
     in Array.of_seq (List.to_seq (aux [] tree));;
+

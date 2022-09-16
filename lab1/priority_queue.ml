@@ -4,11 +4,11 @@ let is_single = function
     | _ -> false
 let rec insert queue priority value =
     match queue with
-    | Empty -> Node (priority, value, Empty, Empty)
-    | Node (priority', value', left, right) ->
-        if priority <= priority'
-        then Node (priority, value, insert right priority' value', left)
-        else Node (priority', value', insert right priority value, left)
+        | Empty -> Node (priority, value, Empty, Empty)
+        | Node (priority', value', left, right) ->
+            if priority <= priority'
+            then Node (priority, value, insert right priority' value', left)
+            else Node (priority', value', insert right priority value, left)
 let rec remove_top = function
     | Empty -> None
     | Node (priority, value, left, Empty) -> Some left
@@ -29,6 +29,6 @@ let extract = function
     | Empty -> None
     | Node (priority, value, _, _) as queue ->
         match remove_top queue with
-        | None -> Some (priority, value, Empty)
-        | Some node -> Some (priority, value, node)
+            | None -> Some (priority, value, Empty)
+            | Some node -> Some (priority, value, node)
 
