@@ -50,11 +50,12 @@ let dump_metadata metadata =
         (fun (character, weight) acc -> acc @ [character; Char.chr weight])
         metadata.weights
         [] in
-    metadata.remainder :: Char.chr wlen :: weights
+    metadata.remainder :: Char.chr (wlen mod 256) :: weights
 
 let load_metadata (data : char array) =
     let remainder = data.(0) in
     let wlen = int_of_char data.(1) in
+    let wlen = if wlen == 0 then 256 else wlen in
     let weights = ref [] in
     for i = 0 to wlen - 1 do
         let character = data.(2 + i * 2) in
