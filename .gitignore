@@ -4,3 +4,4 @@
 *.o
 *.gsch*
 gsch*
+lab*/*.txt
