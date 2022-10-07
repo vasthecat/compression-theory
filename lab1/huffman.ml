@@ -30,12 +30,14 @@ let rec from_queue queue =
         let (p2, v2, queue) = Option.get (Priority_queue.extract queue) in
         from_queue (Priority_queue.insert queue (p1 + p2) (Node (v1, v2)));;
 
-let get_code tree =
-    let rec aux acc run = function
-        | Leaf value -> (value, List.rev run) :: acc
-        | Node (left, right) ->
-            (aux acc (Zero :: run) left) @ (aux acc (One :: run) right)
-    in Hashtbl.of_seq (List.to_seq (aux [] [] tree));;
+let get_code = function
+    | Leaf value -> Hashtbl.of_seq (List.to_seq [(value, [One])])
+    | tree ->
+        let rec aux acc run = function
+            | Leaf value -> (value, List.rev run) :: acc
+            | Node (left, right) ->
+                (aux acc (Zero :: run) left) @ (aux acc (One :: run) right)
+        in Hashtbl.of_seq (List.to_seq (aux [] [] tree));;
 
 type metadata = {
     weights : (char * int) list;
@@ -149,9 +151,9 @@ class bit_decompressor (archive : char array) =
                     in aux [] 0
             in begin
                 let bits = if ptr == Array.length data - 1 then
-                    List.of_seq (
-                        Seq.drop (int_of_char metadata.remainder) 
-                                 (List.to_seq (List.rev bits)))
+                    List.rev (List.of_seq (
+                        Seq.drop (int_of_char metadata.remainder)
+                                 (List.to_seq (List.rev bits))))
                 else bits
                 in begin
                     buffer <- buffer @ bits;
@@ -178,12 +180,20 @@ let compress bin_data =
 let decompress data =
     let decompressor = new bit_decompressor data in
     let tree = decompressor#metadata.tree in
-    let rec aux acc = function
-        | Leaf value -> aux (value :: acc) tree
-        | Node (left, right) ->
+    match tree with
+    | Leaf value ->
+        let rec aux acc =
             match decompressor#read_bit with
-                | None -> List.rev acc
-                | Some Zero -> aux acc left
-                | Some One -> aux acc right
-    in Array.of_seq (List.to_seq (aux [] tree));;
+            | None -> List.rev acc
+            | Some _ -> aux (value :: acc)
+        in Array.of_seq (List.to_seq (aux []))
+    | tree ->
+        let rec aux acc = function
+            | Leaf value -> aux (value :: acc) tree
+            | Node (left, right) ->
+                match decompressor#read_bit with
+                    | None -> List.rev acc
+                    | Some Zero -> aux acc left
+                    | Some One -> aux acc right
+        in Array.of_seq (List.to_seq (aux [] tree));;
 
