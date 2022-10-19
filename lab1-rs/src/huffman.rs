@@ -29,7 +29,8 @@ impl<T: std::cmp::Eq + std::hash::Hash + Copy> HuffmanTree<T> {
         while let Some(p) = queue.pop() {
             huf_queue.insert(p.weight, Box::new(HuffmanTree::Leaf(p.value)));
         }
-        while !huf_queue.is_single() {
+        assert!(huf_queue.len() > 0);
+        while huf_queue.len() > 1 {
             let v1 = huf_queue.pop().unwrap();
             let v2 = huf_queue.pop().unwrap();
             huf_queue.insert(
@@ -109,7 +110,7 @@ impl Metadata {
 
     fn load(data: &Vec<u8>) -> Self {
         let remainder = data[0];
-        let dict_len = data[1] as usize;
+        let dict_len = data[1] as usize + 1;
         let mut weights = HashMap::new();
         for i in 0..dict_len {
             weights.insert(data[2 + 2 * i], data[2 + 2 * i + 1] as u32);
@@ -134,7 +135,7 @@ impl Metadata {
         let mut result = Vec::new();
 
         result.push(self.remainder);
-        result.push(self.weights.len() as u8);
+        result.push((self.weights.len() - 1) as u8);
         for (byte, weight) in &self.weights {
             result.push(*byte);
             result.push(*weight as u8);

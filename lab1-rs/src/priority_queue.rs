@@ -1,6 +1,7 @@
 use std::collections::{BinaryHeap};
 use std::cmp::Ordering;
 
+#[derive(Debug)]
 pub struct Weighted<T> {
     pub weight: u32,
     pub value: T
@@ -22,10 +23,11 @@ impl<T> PartialOrd for Weighted<T> {
 
 impl<T> Ord for Weighted<T> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.weight.cmp(&other.weight)
+        self.weight.cmp(&other.weight).reverse()
     }
 }
 
+#[derive(Debug)]
 pub struct PriorityQueue<T> {
     heap: BinaryHeap<Weighted<T>>,
 }
@@ -41,8 +43,8 @@ impl<T> PriorityQueue<T> {
         self.heap.push(Weighted { weight: priority, value });
     }
 
-    pub fn is_single(&self) -> bool {
-        self.heap.len() == 1
+    pub fn len(&self) -> usize {
+        self.heap.len()
     }
 
     pub fn pop(&mut self) -> Option<Weighted<T>> {
