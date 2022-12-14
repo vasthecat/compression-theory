@@ -1,19 +1,19 @@
-use std::collections::{BinaryHeap};
 use std::cmp::Ordering;
+use std::collections::BinaryHeap;
 
 #[derive(Debug)]
 pub struct Weighted<T> {
     pub weight: u32,
-    pub value: T
+    pub value: T,
 }
 
-impl <T> PartialEq for Weighted<T> {
+impl<T> PartialEq for Weighted<T> {
     fn eq(&self, other: &Self) -> bool {
         self.weight == other.weight
     }
 }
 
-impl <T> Eq for Weighted<T> { }
+impl<T> Eq for Weighted<T> {}
 
 impl<T> PartialOrd for Weighted<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -35,12 +35,15 @@ pub struct PriorityQueue<T> {
 impl<T> PriorityQueue<T> {
     pub fn new() -> Self {
         PriorityQueue {
-            heap: BinaryHeap::new()
+            heap: BinaryHeap::new(),
         }
     }
 
     pub fn insert(&mut self, priority: u32, value: T) {
-        self.heap.push(Weighted { weight: priority, value });
+        self.heap.push(Weighted {
+            weight: priority,
+            value,
+        });
     }
 
     pub fn len(&self) -> usize {

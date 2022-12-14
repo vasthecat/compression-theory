@@ -1,9 +1,9 @@
 mod huffman;
 mod priority_queue;
 use clap::Parser;
-use std::path::PathBuf;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Read, Write};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 struct Cli {
@@ -55,14 +55,11 @@ fn main() -> std::io::Result<()> {
 
     if let Err(error) = result {
         match error.kind() {
-            ErrorKind::NotFound =>
-                println!("Указанный файл не найден"),
-            ErrorKind::AlreadyExists =>
-                println!("Указанный файл уже существует"),
+            ErrorKind::NotFound => println!("Указанный файл не найден"),
+            ErrorKind::AlreadyExists => println!("Указанный файл уже существует"),
             _ => println!("Произошла непредвиденная ошибка"),
         };
     }
 
-
-    return Ok(());
+    Ok(())
 }

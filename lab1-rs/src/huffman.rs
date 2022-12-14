@@ -1,12 +1,18 @@
-use std::collections::HashMap;
 use crate::priority_queue::PriorityQueue;
+use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug)]
-enum Bit { Zero, One, }
+enum Bit {
+    Zero,
+    One,
+}
 impl Bit {
     fn from_u8(x: u8) -> Bit {
-        if x == 0 { Bit::Zero }
-        else { Bit::One }
+        if x == 0 {
+            Bit::Zero
+        } else {
+            Bit::One
+        }
     }
 
     fn to_u8(x: &Bit) -> u8 {
@@ -18,7 +24,10 @@ impl Bit {
 }
 
 #[derive(Debug)]
-enum HuffmanTree<T> where T: std::cmp::Eq + std::hash::Hash + Copy {
+enum HuffmanTree<T>
+where
+    T: std::cmp::Eq + std::hash::Hash + Copy,
+{
     Leaf(T),
     Node(Box<HuffmanTree<T>>, Box<HuffmanTree<T>>),
 }
@@ -35,7 +44,8 @@ impl<T: std::cmp::Eq + std::hash::Hash + Copy> HuffmanTree<T> {
             let v2 = huf_queue.pop().unwrap();
             huf_queue.insert(
                 v1.weight + v2.weight,
-                Box::new(HuffmanTree::Node(v1.value, v2.value)));
+                Box::new(HuffmanTree::Node(v1.value, v2.value)),
+            );
         }
         return *huf_queue.pop().unwrap().value;
     }
@@ -44,7 +54,7 @@ impl<T: std::cmp::Eq + std::hash::Hash + Copy> HuffmanTree<T> {
         match tree {
             HuffmanTree::Leaf(val) => {
                 code.insert(*val, acc.clone());
-            },
+            }
             HuffmanTree::Node(left, right) => {
                 acc.push(Bit::Zero);
                 acc = HuffmanTree::dfs(left, acc, code);
@@ -52,7 +62,7 @@ impl<T: std::cmp::Eq + std::hash::Hash + Copy> HuffmanTree<T> {
                 acc.push(Bit::One);
                 acc = HuffmanTree::dfs(right, acc, code);
                 acc.pop();
-            },
+            }
         };
         return acc;
     }
@@ -162,10 +172,11 @@ impl BitWriter {
 
     fn dump_byte(&mut self) {
         let mut byte = 0_u8;
-        self.buffer.iter()
-                   .map(Bit::to_u8)
-                   .enumerate()
-                   .for_each(|(i, bit)| byte |= bit << i);
+        self.buffer
+            .iter()
+            .map(Bit::to_u8)
+            .enumerate()
+            .for_each(|(i, bit)| byte |= bit << i);
         self.result.push(byte);
         self.buffer.clear();
     }
@@ -195,11 +206,10 @@ pub fn compress(data: &Vec<u8>) -> Vec<u8> {
     let mut metadata = Metadata::compute(data);
 
     let mut writer = BitWriter::new();
-    data.iter()
-        .for_each(|byte| {
-            let bits = metadata.code.get(byte).unwrap();
-            writer.write_bits(&bits);
-         });
+    data.iter().for_each(|byte| {
+        let bits = metadata.code.get(byte).unwrap();
+        writer.write_bits(&bits);
+    });
     writer.finish();
     metadata.remainder = writer.remainder;
 
