@@ -45,7 +45,11 @@ impl<T: std::cmp::Eq + std::hash::Hash + Copy> FanoTree<T> {
         return pf;
     }
 
-    fn from_weighs(weights: &Vec<Weighted<T>>) -> Self {
+    fn from_weights(weights: &Vec<Weighted<T>>) -> Self {
+        if weights.len() == 1 {
+            return FanoTree::Leaf(weights.first().unwrap().value);
+        }
+
         let pf = FanoTree::prefix_sum(weights);
         let m = partition(&pf);
 
@@ -55,13 +59,13 @@ impl<T: std::cmp::Eq + std::hash::Hash + Copy> FanoTree<T> {
         let l_tree = if l.len() == 1 {
             FanoTree::Leaf(l.first().unwrap().value)
         } else {
-            FanoTree::from_weighs(&l)
+            FanoTree::from_weights(&l)
         };
 
         let r_tree = if r.len() == 1 {
             FanoTree::Leaf(r.first().unwrap().value)
         } else {
-            FanoTree::from_weighs(&r)
+            FanoTree::from_weights(&r)
         };
 
         return FanoTree::Node(Box::new(l_tree), Box::new(r_tree));
@@ -76,7 +80,7 @@ impl<T: std::cmp::Eq + std::hash::Hash + Copy> FanoTree<T> {
             })
             .collect::<Vec<Weighted<T>>>();
         weights.sort_by_key(|p| p.weight);
-        return FanoTree::from_weighs(&weights);
+        return FanoTree::from_weights(&weights);
     }
 
     fn get_code_rec(tree: &FanoTree<T>, codes: &mut HashMap<T, Vec<Bit>>, run: Vec<Bit>) {
@@ -91,7 +95,11 @@ impl<T: std::cmp::Eq + std::hash::Hash + Copy> FanoTree<T> {
                 FanoTree::get_code_rec(right, codes, right_run);
             }
             FanoTree::Leaf(value) => {
-                codes.insert(*value, run.clone());
+                if run.len() == 0 {
+                    codes.insert(*value, vec![Bit::Zero]);
+                } else {
+                    codes.insert(*value, run.clone());
+                }
             }
         }
     }
