@@ -70,8 +70,12 @@ fn get_code(probabilities: &Vec<Weighted<u8>>) -> HashMap<u8, Vec<Bit>> {
 
     for i in 0..ps.len() {
         let l = (-ps[i].weight.log2()).ceil() as i32;
-        let bits = get_bits(prefix[i], l);
-        code.insert(ps[i].value, bits);
+        if l == 0 {
+            code.insert(ps[i].value, vec![Bit::Zero]);
+        } else {
+            let bits = get_bits(prefix[i], l);
+            code.insert(ps[i].value, bits);
+        }
     }
 
     return code;
@@ -83,7 +87,7 @@ fn get_bits(x: f32, count: i32) -> Vec<Bit> {
     let mut tmp = x;
     for _ in 0..count {
         tmp *= 2f32;
-        if tmp > 1f32 {
+        if tmp >= 1f32 {
             bits.push(Bit::One);
             tmp -= 1f32;
         } else {
