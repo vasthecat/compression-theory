@@ -4,7 +4,9 @@
 *.o
 *.gsch*
 gsch*
+gs*
 lab*/*.txt
+lab*/*.gs*
 
 *.pdf
 *.aux

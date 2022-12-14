@@ -7,7 +7,7 @@ pub struct Weighted<T> {
     pub value: T,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Bit {
     Zero,
     One,
@@ -29,108 +29,52 @@ impl Bit {
     }
 }
 
-#[derive(Debug)]
-enum ShannonTree<T>
-where
-    T: std::cmp::Eq + std::hash::Hash + Copy + std::cmp::Ord,
-{
-    Leaf(T),
-    Node(Option<Box<ShannonTree<T>>>, Option<Box<ShannonTree<T>>>),
+fn get_probabilities(data: &Vec<u8>) -> Vec<Weighted<u8>> {
+    let mut counts = HashMap::new();
+    data.iter().for_each(|byte| {
+        *counts.entry(*byte).or_insert(0) += 1;
+    });
+    let mut counts: Vec<(u8, u32)> = counts.drain().collect();
+    counts.sort();
+
+    let total = data.len() as f32;
+    let mut weights = Vec::new();
+    counts.iter().for_each(|(byte, count)| {
+        weights.push(Weighted {
+            value: *byte,
+            weight: *count as f32 / total,
+        });
+    });
+    return weights;
 }
 
-impl<T: std::cmp::Eq + std::hash::Hash + Copy + std::cmp::Ord> ShannonTree<T> {
-    // fn from_code(code: &HashMap<T, Vec<Bit>>) -> Self {
-    //     let mut tree = ShannonTree::Node(None, None);
-    //     let mut cur = &tree;
-    //     code.iter().for_each(|(c, bits)| {
-    //         for i in 0..bits.len() {
-    //             let bit = bits[i];
-    //             if i == bits.len() - 1 {
-    //                 match &bit {
-    //                     Bit::Zero => {
-    //                         if let ShannonTree::Node(_, right) = cur {
-    //                             let tmp = Box::new(ShannonTree::Leaf(*c));
-    //                             *cur = ShannonTree::Node(Some(tmp), *right);
-    //                             cur = &tree;
-    //                         }
-    //                     }
-    //                     Bit::One => {
-    //                         if let ShannonTree::Node(left, _) = cur {
-    //                             let tmp = Box::new(ShannonTree::Leaf(*c));
-    //                             *cur = ShannonTree::Node(*left, Some(tmp));
-    //                             cur = &tree;
-    //                         }
-    //                     }
-    //                 }
-    //             } else {
-    //                 match &bit {
-    //                     Bit::Zero => {
-    //                         if let ShannonTree::Node(_, right) = cur {
-    //                             let tmp = Box::new(ShannonTree::Node(None, None));
-    //                             *cur = ShannonTree::Node(Some(tmp), *right);
-    //                             cur = &*tmp;
-    //                         }
-    //                     }
-    //                     Bit::One => {
-    //                         if let ShannonTree::Node(left, _) = cur {
-    //                             let tmp = Box::new(ShannonTree::Node(None, None));
-    //                             *cur = ShannonTree::Node(*left, Some(tmp));
-    //                             cur = &*tmp;
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     });
-    //     return tree;
-    // }
-
-    fn get_probabilities(data: &Vec<T>) -> Vec<Weighted<T>> {
-        let mut counts = HashMap::new();
-        data.iter().for_each(|byte| {
-            *counts.entry(*byte).or_insert(1) += 1;
-        });
-        let mut counts: Vec<(T, u32)> = counts.drain().collect();
-        counts.sort();
-
-        let total = data.len() as f32;
-        let mut weights = Vec::new();
-        counts.iter().for_each(|(byte, count)| {
-            weights.push(Weighted {
-                value: *byte,
-                weight: *count as f32 / total,
-            });
-        });
-        return weights;
-    }
-
-    fn prefix_sum(weights: &Vec<Weighted<T>>) -> Vec<f32> {
-        let mut pf = Vec::new();
-        for i in 0..weights.len() {
-            if i == 0 {
-                pf.push(0f32);
-            } else {
-                pf.push(weights[i].weight + pf[i - 1]);
-            }
+fn prefix_sum(weights: &Vec<Weighted<u8>>) -> Vec<f32> {
+    let mut pf = Vec::new();
+    for i in 0..weights.len() {
+        if i == 0 {
+            pf.push(0f32);
+        } else {
+            pf.push(weights[i - 1].weight + pf[i - 1]);
         }
-        return pf;
+    }
+    return pf;
+}
+
+fn get_code(probabilities: &Vec<Weighted<u8>>) -> HashMap<u8, Vec<Bit>> {
+    let mut code = HashMap::new();
+
+    let mut ps = probabilities.clone();
+    ps.sort_by(|a, b| a.weight.partial_cmp(&b.weight).unwrap_or(Ordering::Equal));
+    ps.reverse();
+    let prefix = prefix_sum(&ps);
+
+    for i in 0..ps.len() {
+        let l = (-ps[i].weight.log2()).ceil() as i32;
+        let bits = get_bits(prefix[i], l);
+        code.insert(ps[i].value, bits);
     }
 
-    fn get_code(ps: &Vec<Weighted<T>>) -> HashMap<T, Vec<Bit>> {
-        let mut code = HashMap::new();
-
-        ps.sort_by(|a, b| a.weight.partial_cmp(&b.weight).unwrap_or(Ordering::Equal));
-        ps.reverse();
-        let prefix = ShannonTree::prefix_sum(&ps);
-
-        for i in 0..ps.len() {
-            let l = (-ps[i].weight.log2()).ceil() as i32;
-            let bits = get_bits(prefix[i], l);
-            code.insert(ps[i].value, bits);
-        }
-
-        return code;
-    }
+    return code;
 }
 
 fn get_bits(x: f32, count: i32) -> Vec<Bit> {
@@ -153,20 +97,17 @@ fn get_bits(x: f32, count: i32) -> Vec<Bit> {
 #[derive(Debug)]
 struct Metadata {
     probabilities: Vec<Weighted<u8>>,
-    tree: ShannonTree<u8>,
     code: HashMap<u8, Vec<Bit>>,
     remainder: u8,
 }
 
 impl Metadata {
     fn compute(data: &Vec<u8>) -> Self {
-        let probs = ShannonTree::get_probabilities(&data);
-        let code = ShannonTree::get_code(&probs);
-        let tree = ShannonTree::from_code(&code);
+        let probs = get_probabilities(&data);
+        let code = get_code(&probs);
 
         return Self {
             probabilities: probs,
-            tree,
             code,
             remainder: 0,
         };
@@ -177,20 +118,23 @@ impl Metadata {
         let dict_len = data[1] as usize + 1;
         let mut probabilities = Vec::new();
         for i in 0..dict_len {
-            let pstart = 2 + 2 * i + 1;
-            let psize = std::mem::size_of::<f32>();
-            let prob: f32 = unsafe { std::mem::transmute(&data[pstart..=pstart + psize]) };
+            let pstart = 2 + 5 * i + 1;
+            let prob = [
+                data[pstart + 0],
+                data[pstart + 1],
+                data[pstart + 2],
+                data[pstart + 3],
+            ];
+            let prob: f32 = unsafe { std::mem::transmute(prob) };
             probabilities.push(Weighted {
-                value: data[2 + 2 * i],
+                value: data[2 + 5 * i],
                 weight: prob,
             });
         }
-        let code = ShannonTree::get_code(&probabilities);
-        let tree = ShannonTree::from_code(&code);
+        let code = get_code(&probabilities);
 
         return Self {
             probabilities,
-            tree,
             code,
             remainder,
         };
@@ -203,9 +147,9 @@ impl Metadata {
         result.push((self.probabilities.len() - 1) as u8);
         for p in &self.probabilities {
             result.push(p.value);
-            let bweight: &[u8; 4] = unsafe { std::mem::transmute(p.weight) };
+            let bweight: [u8; 4] = unsafe { std::mem::transmute(p.weight) };
             for b in bweight {
-                result.push(*b);
+                result.push(b);
             }
         }
 
@@ -323,21 +267,24 @@ pub fn decompress(archive: &Vec<u8>) -> Vec<u8> {
     let mut result = Vec::new();
     let metadata = Metadata::load(archive);
 
-    let data = archive[2 + metadata.probabilities.len() * 2..].to_vec();
+    let data = archive[2 + metadata.probabilities.len() * 5..].to_vec();
     let mut reader = BitReader::new(&data, &metadata);
 
-    let mut state = &metadata.tree;
+    let mut run = Vec::new();
     while let Some(bit) = reader.read_bit() {
-        if let ShannonTree::Node(left, right) = state {
-            match bit {
-                Bit::Zero => state = left.as_ref().unwrap(),
-                Bit::One => state = right.as_ref().unwrap(),
+        run.push(bit);
+        'checker: for p in &metadata.code {
+            if p.1.len() != run.len() {
+                continue;
             }
-        }
-
-        if let ShannonTree::Leaf(byte) = state {
-            result.push(*byte);
-            state = &metadata.tree;
+            for i in 0..run.len() {
+                if p.1[i] != run[i] {
+                    continue 'checker;
+                }
+            }
+            result.push(*p.0);
+            run.clear();
+            break;
         }
     }
 
