@@ -1,5 +1,4 @@
 mod gilbert_moore;
-mod weighted;
 use clap::Parser;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Read, Write};
