@@ -8,7 +8,6 @@ gs*
 lab*/*.txt
 lab*/*.gs*
 
-*.pdf
 *.aux
 *.fls
 *.log
