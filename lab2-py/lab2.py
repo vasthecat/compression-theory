@@ -84,20 +84,9 @@ class BitReader:
             return True
         return False
 
-    def _four_bytes(self):
-        res = self._next_byte()
-        self._next_byte()
-        self._next_byte()
-        self._next_byte()
-        self._next_byte()
-        self._next_byte()
-        self._next_byte()
-        self._next_byte()
-        return res
-
     def read_bit(self):
         if len(self._buffer) == 0:
-            if not self._four_bytes():
+            if not self._next_byte():
                 return None
         return self._buffer.pop()
 
