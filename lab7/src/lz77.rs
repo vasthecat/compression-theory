@@ -7,7 +7,7 @@ pub fn lz_match(data: &Vec<u8>, pos1: usize, pos2: usize, length: usize) -> bool
     return true;
 }
 
-pub fn lz77_encode(data: &Vec<u8>, window_size: usize) -> Vec<(usize, usize, u8)> {
+pub fn lz77_encode(data: &Vec<u8>, window_size: usize) -> Vec<(u32, u8, u8)> {
     let mut ptr = 0;
     let mut encoded = Vec::new();
 
@@ -32,7 +32,7 @@ pub fn lz77_encode(data: &Vec<u8>, window_size: usize) -> Vec<(usize, usize, u8)
             }
         }
         if let Some((l, offset)) = saved {
-            encoded.push((offset, l, data[ptr + l]));
+            encoded.push((offset as u32, l as u8, data[ptr + l]));
             ptr += l + 1;
         } else {
             encoded.push((0, 0, data[ptr]));
@@ -45,11 +45,14 @@ pub fn lz77_encode(data: &Vec<u8>, window_size: usize) -> Vec<(usize, usize, u8)
 
 pub fn compress(data: &Vec<u8>) -> Vec<u8> {
     let mut result = Vec::new();
-    let encoded = lz77_encode(data, 256);
+    let encoded = lz77_encode(data, 8192);
 
     for (offset, length, byte) in &encoded {
-        result.push(*offset as u8);
-        result.push(*length as u8);
+        let offset_bytes: [u8; 4] = unsafe { std::mem::transmute(*offset) };
+        result.push(offset_bytes[0]);
+        result.push(offset_bytes[1]);
+
+        result.push(*length);
         result.push(*byte);
     }
 
@@ -59,19 +62,24 @@ pub fn compress(data: &Vec<u8>) -> Vec<u8> {
 pub fn decompress(archive: &Vec<u8>) -> Vec<u8> {
     let mut result = Vec::new();
     let mut ptr: usize = 0;
-    for i in 0..archive.len() / 3 {
-        let offset = archive[i * 3 + 0] as usize;
-        let length = archive[i * 3 + 1] as usize;
-        let byte = archive[i * 3 + 2];
+    let block_size = 4;
+    for i in 0..archive.len() / block_size {
+        let b_offset = i * block_size;
+
+        let offset_bytes: [u8; 4] = [archive[b_offset + 0], archive[b_offset + 1], 0, 0];
+        let offset: u32 = unsafe { std::mem::transmute(offset_bytes) };
+        let length = archive[b_offset + 2] as usize;
+        let byte = archive[b_offset + 3];
+
         if length == 0 {
             result.push(byte);
             ptr += 1;
         } else {
-            for j in 0..length {
-                result.push(result[ptr - offset + j]);
+            for j in 0..length as usize {
+                result.push(result[ptr - offset as usize + j]);
             }
             result.push(byte);
-            ptr += length + 1;
+            ptr += length as usize + 1;
         }
     }
     return result;
